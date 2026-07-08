@@ -677,21 +677,39 @@ async function loadRemoteState(){
   render();
 
   // 2) chargement du vrai état partagé en arrière-plan, sans bloquer l'affichage
-  withTimeout(loadRemoteState(), 4000)
-    .then(async data=>{
-      if(!data) throw new Error("empty");
-      state = data;
-      if(!state.targetAssignments){
-        state.targetAssignments = generateTargetAssignments(state.participants);
-        await saveState();
+  //    avec un système de nouvelles tentatives, pour ne JAMAIS écraser les données
+  //    existantes juste à cause d'un raté réseau ponctuel.
+  async function tryLoad(attemptsLeft){
+    try{
+      const data = await withTimeout(loadRemoteState(), 4000);
+      if(data){
+        state = data;
+        if(!state.targetAssignments){
+          state.targetAssignments = generateTargetAssignments(state.participants);
+          await saveState();
+        }
+        render();
+        return;
       }
-      render();
-    })
-    .catch(async ()=>{
-      // pas de donnée existante (première utilisation) ou stockage indisponible :
-      // on garde l'état par défaut déjà affiché, et on tente de le sauvegarder
-      try{ await saveState(); }catch(e){}
-    });
+      // data vide : soit vraie première utilisation, soit stockage local sans backend
+      if(!API_URL){
+        try{ await saveState(); }catch(e){}
+      } else if(attemptsLeft > 0){
+        setTimeout(()=>tryLoad(attemptsLeft-1), 1500);
+      }
+      // si API_URL est configuré et que ça reste vide après plusieurs essais,
+      // on ne sauvegarde JAMAIS depuis ici : mieux vaut rester en lecture seule
+      // temporaire que risquer d'écraser les vraies données de tout le monde.
+    }catch(e){
+      if(attemptsLeft > 0){
+        setTimeout(()=>tryLoad(attemptsLeft-1), 1500);
+      }
+      // échec réseau : on NE sauvegarde JAMAIS l'état par défaut ici.
+      // on garde juste l'affichage local en attendant que la connexion revienne ;
+      // le rafraîchissement périodique (ci-dessous) reprendra le relais.
+    }
+  }
+  tryLoad(4);
 
   // 3) rafraîchissement périodique pour un effet "live" entre tous les téléphones
   setInterval(async ()=>{
