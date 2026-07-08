@@ -31,6 +31,7 @@
   }
   *{box-sizing:border-box;}
   @keyframes fadeIn{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);}}
+  @keyframes spin{from{transform:rotate(0deg);} to{transform:rotate(360deg);}}
   @keyframes bump{0%{transform:scale(1);} 40%{transform:scale(1.28);} 100%{transform:scale(1);}}
   html{background:var(--bg);}
   body{
@@ -174,12 +175,17 @@ async function remoteGet(){
   const text = await res.text();
   return JSON.parse(text);
 }
-async function remoteSet(value){
-  await fetch(API_URL, {
+// Envoie UNE action précise au serveur (jamais l'état complet) : le serveur fusionne
+// sous verrou et renvoie la version canonique à jour, qui prend en compte les actions
+// des autres appareils même si elles sont arrivées entre-temps.
+async function remoteAction(kind, payload){
+  const res = await fetch(API_URL, {
     method:"POST",
     headers: {"Content-Type":"text/plain;charset=utf-8"}, // évite le préflight CORS qu'Apps Script ne gère pas
-    body: JSON.stringify(value)
+    body: JSON.stringify(Object.assign({kind}, payload))
   });
+  const text = await res.text();
+  return JSON.parse(text);
 }
 
 const DEFIS = [
@@ -292,11 +298,63 @@ let collapsedLevels = {2:true, 3:true, 4:true, 5:true}; // niveau 1 ouvert par d
 function toggleLevel(n){ collapsedLevels[n] = !collapsedLevels[n]; render(); }
 function triggerBump(){ bumpFlag = true; setTimeout(()=>{ bumpFlag = false; }, 500); }
 
+// Les points/pièces/bonus ne sont JAMAIS stockés ou transmis directement : ils sont
+// toujours recalculés à partir du journal brut des défis validés (completions) et des
+// mystères (mysteries). Ça élimine tout risque d'écrasement : deux appareils peuvent
+// fusionner leurs événements dans n'importe quel ordre, le résultat recalculé est toujours correct.
+function computeParticipants(completions, mysteries){
+  const base = PEOPLE.map((per,i)=>({id:"p"+i, codename:per.codename, role:per.role, emoji:per.emoji, coins:0, points:0, bonus:0}));
+  const byId = {}; base.forEach(p=>byId[p.id]=p);
+  (completions||[]).forEach(c=>{
+    const p = byId[c.pid]; const d = DEFIS.find(x=>x.id===c.defiId);
+    if(p && d && c.awarded){ p.coins += 1; p.points += d.niv; }
+  });
+  (mysteries||[]).forEach(m=>{
+    if(m.guessCorrect){
+      const t = byId[m.targetId];
+      if(t){ t.bonus += 3; t.points += 3; }
+    }
+  });
+  return base;
+}
+function refreshParticipants(){ state.participants = computeParticipants(state.completions, state.mysteries); }
+
+// Applique une réponse canonique reçue du serveur (après fusion) à l'état local
+function applyCanonical(data){
+  state.completions = data.completions || [];
+  state.mysteries = data.mysteries || [];
+  state.targetAssignments = data.targetAssignments || state.targetAssignments || null;
+  refreshParticipants();
+}
+
 async function saveState(){
+  // utilisé uniquement pour le repli local (window.storage) quand aucun API_URL n'est configuré
+  try{ await window.storage.set(STORE_KEY, JSON.stringify({completions:state.completions, mysteries:state.mysteries, targetAssignments:state.targetAssignments}), true); }catch(e){}
+}
+
+async function syncAddCompletion(completion){
   if(API_URL){
-    try{ await remoteSet(state); return; }catch(e){ console.error("remoteSet failed", e); }
-  }
-  try{ await window.storage.set(STORE_KEY, JSON.stringify(state), true); }catch(e){}
+    try{ applyCanonical(await remoteAction("addCompletion", {completion})); render(); }
+    catch(e){ console.error("sync addCompletion failed", e); }
+  } else { await saveState(); }
+}
+async function syncRevokeCompletion(id){
+  if(API_URL){
+    try{ applyCanonical(await remoteAction("revokeCompletion", {id})); render(); }
+    catch(e){ console.error("sync revokeCompletion failed", e); }
+  } else { await saveState(); }
+}
+async function syncUpsertMystery(mystery){
+  if(API_URL){
+    try{ applyCanonical(await remoteAction("upsertMystery", {mystery})); render(); }
+    catch(e){ console.error("sync upsertMystery failed", e); }
+  } else { await saveState(); }
+}
+async function syncSetTargetsIfEmpty(targetAssignments){
+  if(API_URL){
+    try{ applyCanonical(await remoteAction("setTargetsIfEmpty", {targetAssignments})); render(); }
+    catch(e){ console.error("sync setTargets failed", e); }
+  } else { await saveState(); }
 }
 
 function participant(id){ return state.participants.find(p=>p.id===id); }
@@ -315,12 +373,12 @@ async function completeDefi(defi){
     return;
   }
   if(isDone(p.id, defi.id)) return; // déjà validé : on ignore tout clic supplémentaire
-  state.completions.push({id:"c"+Date.now(), pid:p.id, defiId:defi.id, ts:Date.now(), awarded:true});
-  p.coins += 1;
-  p.points += defi.niv;
+  const completion = {id:"c"+Date.now()+"_"+p.id, pid:p.id, defiId:defi.id, ts:Date.now(), awarded:true};
+  state.completions.push(completion);
+  refreshParticipants();
   triggerBump();
-  render(); // affichage immédiat (bouton grisé) avant même la sauvegarde, pour bloquer les double-clics
-  await saveState();
+  render(); // affichage immédiat (bouton grisé) avant même la synchro, pour bloquer les double-clics
+  await syncAddCompletion(completion);
 }
 
 function openSecretFlow(defi){
@@ -328,9 +386,9 @@ function openSecretFlow(defi){
   let myst = state.mysteries.find(m=>m.authorId===p.id && m.defiId===defi.id && !m.driveLink);
   if(!myst){
     const targetId = state.targetAssignments[p.id];
-    myst = {id:"m"+Date.now(), authorId:p.id, targetId:targetId, defiId:defi.id, driveLink:null, ts:Date.now(), revealed:false, guessId:null, guessCorrect:null};
+    myst = {id:"m"+Date.now()+"_"+p.id, authorId:p.id, targetId:targetId, defiId:defi.id, driveLink:null, ts:Date.now(), revealed:false, guessId:null, guessCorrect:null};
     state.mysteries.push(myst);
-    saveState();
+    syncUpsertMystery(myst);
   }
   modal = {type:"secret", myst, defi};
   render();
@@ -343,48 +401,40 @@ async function submitSecretLink(mystId, link){
   const p = participant(m.authorId);
   const defi = DEFIS.find(d=>d.id===m.defiId);
   const alreadyAwarded = state.completions.some(c=>c.pid===p.id && c.defiId===defi.id && c.awarded);
-  state.completions.push({id:"c"+Date.now(), pid:p.id, defiId:defi.id, ts:Date.now(), awarded: !alreadyAwarded});
-  if(!alreadyAwarded){
-    p.coins += 1; p.points += defi.niv;
-    triggerBump();
-  }
-  await saveState();
+  const completion = {id:"c"+Date.now()+"_"+p.id, pid:p.id, defiId:defi.id, ts:Date.now(), awarded: !alreadyAwarded};
+  state.completions.push(completion);
+  refreshParticipants();
+  if(!alreadyAwarded) triggerBump();
   modal = null;
   render();
+  await syncUpsertMystery({id:m.id, driveLink:link});
+  await syncAddCompletion(completion);
 }
 
 async function submitGuess(mystId, suspectId){
   const m = state.mysteries.find(x=>x.id===mystId);
   m.guessId = suspectId;
   m.guessCorrect = (suspectId === m.authorId);
-  if(m.guessCorrect){
-    const target = participant(m.targetId);
-    target.bonus += 3; target.points += 3;
-  }
-  await saveState();
+  refreshParticipants();
   modal = null;
   render();
+  await syncUpsertMystery({id:m.id, guessId:m.guessId, guessCorrect:m.guessCorrect});
 }
 
 async function revokeCompletion(cid){
   const c = state.completions.find(x=>x.id===cid);
   if(!c) return;
-  const p = participant(c.pid);
-  const defi = DEFIS.find(d=>d.id===c.defiId);
-  if(c.awarded){
-    p.coins = Math.max(0, p.coins-1);
-    p.points = Math.max(0, p.points-defi.niv);
-  }
   state.completions = state.completions.filter(x=>x.id!==cid);
-  await saveState();
+  refreshParticipants();
   render();
+  await syncRevokeCompletion(cid);
 }
 
 async function toggleReveal(mystId){
   const m = state.mysteries.find(x=>x.id===mystId);
   m.revealed = !m.revealed;
-  await saveState();
   render();
+  await syncUpsertMystery({id:m.id, revealed:m.revealed});
 }
 
 function el(html){ const d=document.createElement("div"); d.innerHTML=html.trim(); return d.firstChild; }
@@ -492,15 +542,21 @@ function renderClassementView(){
   let html = `<header class="top"><p class="eyebrow">Camp Pio</p><h1 class="display">Classement</h1></header><main>`;
   sorted.forEach((p,i)=>{
     html += `
-    <div class="lb-row ${i===0?'top1':''}">
+    <div class="lb-row ${i===0?'top1':''}" style="cursor:pointer;" onclick="openParticipantDefis('${p.id}')">
       <div class="lb-rank mono">${i===0?'👑':i+1}</div>
       <div class="lb-name"><span class="lb-totem">${totemFor(p.id)}</span>${p.codename}${p.id===currentId?' (toi)':''}</div>
       <div class="lb-bar-wrap"><div class="lb-bar" style="width:${(p.points/max)*100}%"></div></div>
       <div class="lb-pts">${p.points}</div>
     </div>`;
   });
+  html += `<p style="text-align:center; font-size:11px; color:var(--text-dim); margin-top:4px;">Tape sur un totem pour voir ses défis validés</p>`;
   html += `</main>`;
   return html;
+}
+
+function openParticipantDefis(pid){
+  modal = {type:"viewDefis", pid};
+  render();
 }
 
 function renderMystereView(){
@@ -584,6 +640,33 @@ function tryStaffCode(){
 
 function renderModal(){
   if(!modal) return "";
+  if(modal.type==="viewDefis"){
+    const p = participant(modal.pid);
+    const mine = state.completions.filter(c=>c.pid===p.id).sort((a,b)=>a.ts-b.ts);
+    let rows = "";
+    if(mine.length===0){
+      rows = `<p class="lock-note">Aucun défi validé pour l'instant.</p>`;
+    } else {
+      mine.forEach(c=>{
+        const d = DEFIS.find(x=>x.id===c.defiId);
+        if(!d) return;
+        rows += `
+        <div class="card" style="--lvl-color:${lvlColor(d.niv)}; margin-bottom:8px;">
+          <p class="txt" style="padding-right:10px;">${d.txt}</p>
+          <div class="row"><span class="tag done">Niveau ${d.niv} · +${d.niv}${c.awarded===false?' (déjà comptabilisé)':''}</span></div>
+        </div>`;
+      });
+    }
+    return `
+    <div class="modal-bg" onclick="if(event.target===this){modal=null;render();}">
+      <div class="modal" style="max-height:80vh; overflow-y:auto;">
+        <h3>${totemFor(p.id)} ${p.codename} — ${p.points} pts</h3>
+        <p style="color:var(--text-dim); font-size:12px; margin-top:-4px;">${mine.length} défi${mine.length>1?'s':''} validé${mine.length>1?'s':''}</p>
+        ${rows}
+        <button class="btn btn-ghost" style="width:100%; margin-top:6px;" onclick="modal=null; render();">Fermer</button>
+      </div>
+    </div>`;
+  }
   if(modal.type==="secret"){
     const target = participant(modal.myst.targetId);
     return `
@@ -623,10 +706,10 @@ function render(){
   let html = "";
   if(!stateReady){
     html = `
-    <div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px;">
-      <p class="eyebrow" style="margin-bottom:10px;">CAMP PIO · EXPÉDITION</p>
-      <div style="font-size:36px; margin-bottom:10px;">🧭</div>
-      <p style="color:var(--text-dim); font-size:13px;">Connexion au classement...</p>
+    <div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px; gap:14px;">
+      <p class="eyebrow" style="margin:0;">CAMP PIO · EXPÉDITION</p>
+      <div class="loading-spinner" style="font-size:40px; animation: spin 1.4s linear infinite;">🧭</div>
+      <p style="color:var(--text-dim); font-size:13px; margin:0;">Connexion au classement...</p>
     </div>`;
     app.innerHTML = html;
     return;
@@ -657,12 +740,12 @@ function generateTargetAssignments(participants){
 }
 
 function defaultState(){
-  const participants = PEOPLE.map((per,i)=>({id:"p"+i, codename:per.codename, role:per.role, emoji:per.emoji, coins:0, points:0, bonus:0}));
+  const completions = [], mysteries = [];
   return {
-    participants,
-    completions: [],
-    mysteries: [],
-    targetAssignments: generateTargetAssignments(participants)
+    participants: computeParticipants(completions, mysteries),
+    completions,
+    mysteries,
+    targetAssignments: null
   };
 }
 
@@ -673,13 +756,15 @@ function withTimeout(promise, ms){
   ]);
 }
 
+// Renvoie {completions, mysteries, targetAssignments} — jamais "participants" (toujours recalculé)
 async function loadRemoteState(){
   if(API_URL){
     const data = await remoteGet();
-    return (data && Object.keys(data).length) ? data : null;
+    return (data && (data.completions || data.mysteries || data.targetAssignments)) ? data : null;
   }
   const r = await window.storage.get(STORE_KEY, true);
-  return JSON.parse(r.value);
+  const data = JSON.parse(r.value);
+  return (data && Object.keys(data).length) ? data : null;
 }
 
 (function init(){
@@ -696,10 +781,13 @@ async function loadRemoteState(){
     try{
       const data = await withTimeout(loadRemoteState(), 4000);
       if(data){
-        state = data;
+        state.completions = data.completions || [];
+        state.mysteries = data.mysteries || [];
+        state.targetAssignments = data.targetAssignments || null;
+        refreshParticipants();
         if(!state.targetAssignments){
-          state.targetAssignments = generateTargetAssignments(state.participants);
-          await saveState();
+          const generated = generateTargetAssignments(state.participants);
+          await syncSetTargetsIfEmpty(generated); // si un autre appareil a été plus rapide, le sien est gardé
         }
         stateReady = true;
         render();
@@ -707,6 +795,7 @@ async function loadRemoteState(){
       }
       if(!API_URL){
         // pas de backend externe : mode local, première utilisation légitime
+        state.targetAssignments = generateTargetAssignments(state.participants);
         try{ await saveState(); }catch(e){}
         stateReady = true;
         render();
@@ -726,7 +815,13 @@ async function loadRemoteState(){
     if(modal) return; // on ne perturbe pas une saisie en cours
     try{
       const data = await withTimeout(loadRemoteState(), 4000);
-      if(data){ state = data; render(); }
+      if(data){
+        state.completions = data.completions || [];
+        state.mysteries = data.mysteries || [];
+        state.targetAssignments = data.targetAssignments || state.targetAssignments || null;
+        refreshParticipants();
+        render();
+      }
     }catch(e){ /* silencieux : on retentera au prochain intervalle */ }
   }, 8000);
 })();
