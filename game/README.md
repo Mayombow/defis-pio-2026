@@ -18,6 +18,10 @@ fin du chrono !
 | Se déplacer | `ZQSD` ou flèches | joystick (moitié gauche de l'écran) |
 | Dash 💨 | `Espace` | bouton **DASH** |
 
+> **📱 Sur téléphone :** contrôles tactiles automatiques (joystick + bouton DASH),
+> gestion des encoches (safe-area) et invitation à passer en **paysage** (le jeu
+> affiche toute l'arène). Rien à installer, tout marche dans le navigateur mobile.
+
 - **Ramasse les gemmes** ⭐ : bleu = 1 pt, vert = 3, or = 6, rouge = 12.
 - **Dash** dans un adversaire pour lui **voler des gemmes** (sauf s'il a un bouclier).
 - **Bonus** : 🧲 aimant (attire les gemmes), 🛡 bouclier (protège du dash), ⚡ vitesse.
@@ -29,6 +33,21 @@ fin du chrono !
 2. Il partage le code (ou le lien d'invitation « Copier »).
 3. Les autres ouvrent la **même page**, entrent le code, cliquent **« Rejoindre »**.
 4. L'hôte peut **ajouter des bots 🤖** pour compléter l'arène, puis clique **« Lancer la partie »**.
+
+## 🎯 Modes de jeu (choisis par l'hôte)
+| Mode | But |
+|---|---|
+| 💎 **Ruée** | Ramasse un max de gemmes en 90 s. Le plus gros score gagne. |
+| 👑 **Roi de la Zone** | Une zone lumineuse se déplace ; tu marques des points tant que tu restes dedans. |
+| 🧟 **Infection** | Un « loup » infecte par contact ; les survivants marquent chaque seconde. Deviens le dernier debout. |
+| 💣 **Bombes** | Récolte des gemmes en esquivant les bombes qui explosent (souffle + étourdissement + gemmes lâchées). |
+
+## 🗺️ Terrains (maps)
+4 arènes avec thème et **obstacles** (collisions) qui changent le jeu :
+- 🔷 **Prisme** — arène ouverte, sans obstacle (violet).
+- 🟢 **Labyrinthe** — murs et couloirs (vert).
+- ☄️ **Astéroïdes** — blocs dispersés (orange).
+- ❄️ **Cristaux** — piliers de glace (cyan).
 
 ## 🤖 Bots (IA)
 Dans le salon, l'hôte ajoute/retire des **adversaires contrôlés par l'IA** (＋/－ Bot).

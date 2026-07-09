@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>GEM RUSH — Arène 3-4 joueurs</title>
 <meta name="theme-color" content="#0a0a1f">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -205,6 +205,46 @@
   .botrow{display:flex; align-items:center; justify-content:space-between; gap:10px; margin:4px 0 8px;
     padding:10px 12px; background:rgba(0,0,0,.18); border:1px dashed var(--line); border-radius:14px;}
   .botlabel{font-size:12.5px; color:var(--dim); font-weight:600; text-align:center; flex:1;}
+
+  /* Sélecteurs mode / map */
+  .chipsel{display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:4px;}
+  .selchip{display:flex; align-items:center; gap:9px; padding:11px 12px; border-radius:13px; cursor:pointer;
+    background:rgba(0,0,0,.22); border:2px solid var(--line); transition:transform .1s,border-color .2s,background .2s;}
+  .selchip:active{transform:scale(.96);}
+  .selchip.on{border-color:var(--cyan); background:rgba(8,217,214,.10);}
+  .selchip .em{font-size:22px; line-height:1;}
+  .selchip .tx{min-width:0;}
+  .selchip .tt{font-size:14px; font-weight:700; font-family:'Fredoka';}
+  .selchip .ds{font-size:10.5px; color:var(--dim); line-height:1.25; margin-top:1px;}
+  .setupinfo{padding:12px; margin-bottom:6px; border-radius:14px; background:rgba(0,0,0,.22); border:1px solid var(--line);
+    font-size:13.5px; text-align:center; color:var(--text);}
+  .setupinfo b{font-family:'Fredoka';}
+
+  /* Bannière mode (en jeu) */
+  .modebanner{position:fixed; top:calc(48px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%); z-index:19;
+    font-size:12px; font-weight:700; font-family:'Fredoka'; padding:5px 14px; border-radius:20px; letter-spacing:.5px;
+    background:rgba(10,10,31,.72); border:1px solid var(--line); backdrop-filter:blur(6px); color:var(--text); pointer-events:none; white-space:nowrap;}
+
+  /* Rotation téléphone */
+  .rotate{position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center;
+    background:radial-gradient(120% 120% at 50% 0%, #1b1440, #050510); text-align:center; padding:28px;}
+  .rotate.on{display:flex;}
+  .rotinner h2{font-size:24px; margin:14px 0 8px;}
+  .rotinner p{color:var(--dim); font-size:14px; max-width:280px; margin:0 auto;}
+  .rotico{font-size:64px; animation:rothint 2s ease-in-out infinite; display:inline-block;}
+  @keyframes rothint{0%,100%{transform:rotate(-12deg);}50%{transform:rotate(78deg);}}
+
+  /* Zones tactiles + encoches */
+  .hud{padding-top:calc(10px + env(safe-area-inset-top));}
+  #dashBtn{right:calc(24px + env(safe-area-inset-right)); bottom:calc(34px + env(safe-area-inset-bottom));}
+  #joyZone{padding-bottom:env(safe-area-inset-bottom);}
+  @media (max-width:560px){
+    .schip{font-size:11px; padding:5px 8px; gap:5px;}
+    .schip .sd{width:10px; height:10px;}
+    .timer{font-size:22px; min-width:60px; padding:3px 10px;}
+    .kbdhint{display:none;}
+    #dashBtn{width:84px; height:84px; font-size:15px;}
+  }
 </style>
 </head>
 <body>
@@ -258,6 +298,14 @@
       <button id="copyBtn" class="copybtn">📋 Copier le lien d'invitation</button>
     </div>
 
+    <div id="setupHost" style="display:none">
+      <label class="fld">Mode de jeu</label>
+      <div id="modeSel" class="chipsel"></div>
+      <label class="fld">Terrain</label>
+      <div id="mapSel" class="chipsel"></div>
+    </div>
+    <div id="setupClient" class="setupinfo" style="display:none"></div>
+
     <label class="fld">Participants (<span id="pcount">1</span>/6)</label>
     <div id="playerList" class="plist"></div>
     <div id="lobbyWait" class="waiting">En attente d'autres joueurs…</div>
@@ -285,12 +333,22 @@
       <div id="netpill" class="netpill"><span class="nd"></span><span id="netlabel">connecté</span></div>
     </div>
   </div>
+  <div id="modeBanner" class="modebanner"></div>
 
   <div id="joyZone"><div id="joyBase"></div><div id="joyKnob"></div></div>
   <button id="dashBtn">DASH</button>
   <div class="kbdhint">Déplacement : <b>ZQSD / flèches</b> · Dash : <b>Espace</b></div>
   <div id="toast" class="toast"></div>
 </section>
+
+<!-- ============ ROTATE (mobile portrait) ============ -->
+<div id="rotateOverlay" class="rotate">
+  <div class="rotinner">
+    <div class="rotico">📱</div>
+    <h2 class="display">Tourne ton téléphone</h2>
+    <p>GEM RUSH se joue en mode <b>paysage</b> pour voir toute l'arène.</p>
+  </div>
+</div>
 
 <!-- ============ COUNTDOWN ============ -->
 <div id="countdown"><div id="cdNum" class="num">3</div></div>
@@ -374,6 +432,48 @@ function tierDurMul(t){return 1+0.18*t;}
 function tierPassiveMagnet(t){return t>=2?(t>=3?120:80):0;}
 
 const BOT_NAMES = ['Rex','Nova','Blip','Zap','Milo','Kira','Pixel','Turbo','Gizmo','Echo','Bolt','Vega'];
+
+// ---- Modes de jeu ----
+const MODES = [
+  {id:'rush',   name:'Ruée',           emoji:'💎', desc:'Ramasse un max de gemmes en 90s.'},
+  {id:'zone',   name:'Roi de la Zone', emoji:'👑', desc:'Reste dans la zone lumineuse pour marquer.'},
+  {id:'infect', name:'Infection',      emoji:'🧟', desc:'Fuis le loup, survis le plus longtemps.'},
+  {id:'bomb',   name:'Bombes',         emoji:'💣', desc:'Récolte en esquivant les explosions.'},
+];
+function modeDef(id){return MODES.find(m=>m.id===id)||MODES[0];}
+
+// ---- Maps (thème + obstacles en coords monde 1280x800) ----
+const MAPS = [
+  {id:'prisme', name:'Prisme', emoji:'🔷', bg:'#0d0d24', grid:'#7a5cff', accent:'#a66cff', walls:[]},
+  {id:'laby',   name:'Labyrinthe', emoji:'🟢', bg:'#0a1a12', grid:'#2fbf6c', accent:'#3dff7a', walls:[
+    {x:300,y:120,w:44,h:250},{x:936,y:430,w:44,h:250},
+    {x:300,y:340,w:240,h:44},{x:740,y:416,w:240,h:44},
+    {x:600,y:120,w:80,h:44},{x:600,y:636,w:80,h:44},
+  ]},
+  {id:'astero', name:'Astéroïdes', emoji:'☄️', bg:'#1a0f0a', grid:'#ff7a3d', accent:'#ff9838', walls:[
+    {x:190,y:170,w:96,h:96},{x:994,y:170,w:96,h:96},
+    {x:190,y:534,w:96,h:96},{x:994,y:534,w:96,h:96},
+    {x:560,y:340,w:160,h:120},
+  ]},
+  {id:'cristal', name:'Cristaux', emoji:'❄️', bg:'#07161a', grid:'#2fc9d6', accent:'#08d9d6', walls:[
+    {x:360,y:110,w:52,h:190},{x:868,y:500,w:52,h:190},
+    {x:614,y:330,w:60,h:140},{x:150,y:410,w:52,h:170},{x:1078,y:230,w:52,h:170},
+  ]},
+];
+function mapDef(id){return MAPS.find(m=>m.id===id)||MAPS[0];}
+function inWall(x,y,pad,walls){for(const w of walls){if(x>w.x-pad&&x<w.x+w.w+pad&&y>w.y-pad&&y<w.y+w.h+pad)return true;}return false;}
+// résolution collision cercle/rectangle (repousse le joueur hors du mur)
+function collideWall(p,w){
+  const cx=clamp(p.x,w.x,w.x+w.w), cy=clamp(p.y,w.y,w.y+w.h);
+  let dx=p.x-cx, dy=p.y-cy, d2=dx*dx+dy*dy;
+  if(d2<p.r*p.r){
+    let d=Math.sqrt(d2), nx,ny;
+    if(d>0.0001){nx=dx/d;ny=dy/d;}
+    else{const l=p.x-w.x,r=w.x+w.w-p.x,t=p.y-w.y,b=w.y+w.h-p.y,m=Math.min(l,r,t,b);
+      nx=m===l?-1:m===r?1:0; ny=m===t?-1:m===b?1:0; d=0;}
+    const push=p.r-d; p.x+=nx*push; p.y+=ny*push;
+  }
+}
 const GEM_TYPES = [
   {r:9,  pts:1, col:'#08d9d6', w:60},   // commun
   {r:12, pts:3, col:'#3dff7a', w:28},   // moyen
@@ -428,6 +528,8 @@ const G = {
   conns:{},             // peerId -> DataConnection
   players:{},           // peerId -> player object (host authoritative)
   gems:[], powerups:[],
+  mode:'rush', map:'prisme',
+  zone:null, bombs:[], bombT:0,   // état spécifique aux modes
   phase:'lobby',        // lobby | countdown | playing | ended
   timeLeft:ROUND_TIME,
   results:null,
@@ -514,7 +616,7 @@ function hostOnData(conn,d){
     G.conns[pid]=conn;
     safeSend(conn,{t:'welcome',pid,phase:G.phase,world:{w:WORLD_W,h:WORLD_H}});
     broadcastLobby();
-    if(G.phase==='playing'||G.phase==='countdown') safeSend(conn,{t:'phase',phase:G.phase});
+    if(G.phase==='playing'||G.phase==='countdown') safeSend(conn,{t:'phase',phase:G.phase,mode:G.mode,map:G.map});
   }
   else if(d.t==='input'){
     const p=G.players[pid]; if(!p)return;
@@ -542,7 +644,7 @@ function addPlayer(id,name,isHost,skin){
     x:rand(200,WORLD_W-200),y:rand(200,WORLD_H-200),
     vx:0,vy:0,r:P_RADIUS,score:0,tier:0,connected:true,lastSeen:performance.now(),
     input:{ax:0,ay:0,dashReq:false}, dashT:0,dashCd:0,shield:0,magnet:0,speed:0,
-    hitFx:0,_oldId:id,bot:false,
+    hitFx:0,_oldId:id,bot:false, loup:false,stun:0,infImmune:0,
   };
 }
 let botSeq=0;
@@ -563,34 +665,60 @@ function hostRemoveBot(){
   delete G.players[bots[bots.length-1].id];
   broadcastLobby();
 }
-// ---- IA des bots (exécutée côté hôte) ----
+// ---- IA des bots (exécutée côté hôte), adaptée au mode ----
 function computeBotInput(p,dt){
   p.botT=(p.botT||0)-dt;
   const skill=p.botSkill||0.7;
-  if(p.botT<=0||!p.tgt){
-    p.botT=rand(0.25,0.6);
-    let best=null,bestScore=-1;
-    for(const g of G.gems){const d=Math.hypot(g.x-p.x,g.y-p.y);const s=(g.pts+1)/(d+50);if(s>bestScore){bestScore=s;best={x:g.x,y:g.y};}}
-    for(const pw of G.powerups){const d=Math.hypot(pw.x-p.x,pw.y-p.y);const s=6/(d+50);if(s>bestScore){bestScore=s;best={x:pw.x,y:pw.y};}}
-    p.tgt=best;
-  }
   let dx=0,dy=0;
-  if(p.tgt){dx=p.tgt.x-p.x;dy=p.tgt.y-p.y;const d=Math.hypot(dx,dy)||1;if(d<12)p.tgt=null;dx/=d;dy/=d;}
-  // fuir un adversaire qui fonce (dash)
-  let tmin=140*140;
-  for(const id in G.players){const o=G.players[id];if(o===p)continue;const d2=dist2(o.x,o.y,p.x,p.y);
-    if(o.dashT>0&&d2<tmin&&p.shield<=0){tmin=d2;const ax=p.x-o.x,ay=p.y-o.y,d=Math.hypot(ax,ay)||1;dx=lerp(dx,ax/d,0.85);dy=lerp(dy,ay/d,0.85);}}
-  // éviter les murs
+  const nearestPlayer=(pred)=>{let best=null,bm=1e18;for(const id in G.players){const o=G.players[id];if(o===p||(pred&&!pred(o)))continue;const d2=dist2(o.x,o.y,p.x,p.y);if(d2<bm){bm=d2;best=o;}}return best;};
+
+  if(G.mode==='infect'){
+    if(p.loup){ // le loup chasse le survivant le plus proche
+      const prey=nearestPlayer(o=>!o.loup);
+      if(prey){dx=prey.x-p.x;dy=prey.y-p.y;const d=Math.hypot(dx,dy)||1;dx/=d;dy/=d;
+        if(p.dashCd<=0 && d<200 && Math.random()<skill*0.09){p.input.dashReq=true;}}
+    } else { // le survivant fuit le loup le plus proche
+      const th=nearestPlayer(o=>o.loup);
+      if(th){dx=p.x-th.x;dy=p.y-th.y;const d=Math.hypot(dx,dy)||1;dx/=d;dy/=d;
+        if(p.dashCd<=0 && d<150 && Math.random()<skill*0.08){p.input.dashReq=true;}}
+      else{p.botT-=dt;if(p.botT<=0){p.botT=rand(.4,.9);p.tgt={x:rand(100,WORLD_W-100),y:rand(100,WORLD_H-100)};}
+        if(p.tgt){dx=p.tgt.x-p.x;dy=p.tgt.y-p.y;const d=Math.hypot(dx,dy)||1;dx/=d;dy/=d;}}
+    }
+  } else if(G.mode==='zone' && G.zone){ // aller vers la zone
+    dx=G.zone.x-p.x;dy=G.zone.y-p.y;const d=Math.hypot(dx,dy)||1;dx/=d;dy/=d;
+  } else { // rush / bomb : viser gemmes & bonus
+    if(p.botT<=0||!p.tgt){
+      p.botT=rand(0.25,0.6);let best=null,bestScore=-1;
+      for(const g of G.gems){const d=Math.hypot(g.x-p.x,g.y-p.y);const s=(g.pts+1)/(d+50);if(s>bestScore){bestScore=s;best={x:g.x,y:g.y};}}
+      for(const pw of G.powerups){const d=Math.hypot(pw.x-p.x,pw.y-p.y);const s=6/(d+50);if(s>bestScore){bestScore=s;best={x:pw.x,y:pw.y};}}
+      p.tgt=best;
+    }
+    if(p.tgt){dx=p.tgt.x-p.x;dy=p.tgt.y-p.y;const d=Math.hypot(dx,dy)||1;if(d<12)p.tgt=null;dx/=d;dy/=d;}
+    // dash offensif opportuniste
+    if(p.dashCd<=0){const prey=nearestPlayer(o=>o.shield<=0);
+      if(prey){const d2=dist2(prey.x,prey.y,p.x,p.y);
+        if(d2<175*175 && Math.random()<skill*0.06){const d=Math.sqrt(d2)||1;dx=(prey.x-p.x)/d;dy=(prey.y-p.y)/d;p.input.dashReq=true;}}}
+  }
+
+  // fuir un adversaire qui fonce (dash) — hors infection loup
+  if(!(G.mode==='infect'&&p.loup)){
+    let tmin=140*140;
+    for(const id in G.players){const o=G.players[id];if(o===p)continue;const d2=dist2(o.x,o.y,p.x,p.y);
+      if(o.dashT>0&&d2<tmin&&p.shield<=0){tmin=d2;const ax=p.x-o.x,ay=p.y-o.y,d=Math.hypot(ax,ay)||1;dx=lerp(dx,ax/d,0.8);dy=lerp(dy,ay/d,0.8);}}
+  }
+  // fuir les bombes proches (mode Bombes)
+  if(G.mode==='bomb'){for(const bm of G.bombs){const d2=dist2(bm.x,bm.y,p.x,p.y);
+    if(d2<180*180 && bm.fuse<1.4){const d=Math.sqrt(d2)||1;dx=lerp(dx,(p.x-bm.x)/d,0.9);dy=lerp(dy,(p.y-bm.y)/d,0.9);}}}
+  // répulsion des murs
+  for(const w of mapDef(G.map).walls){
+    const cx=clamp(p.x,w.x,w.x+w.w),cy=clamp(p.y,w.y,w.y+w.h);const ddx=p.x-cx,ddy=p.y-cy,d2=ddx*ddx+ddy*ddy;
+    if(d2<(p.r+46)*(p.r+46)){const d=Math.sqrt(d2)||1;dx+=(ddx/d)*0.8;dy+=(ddy/d)*0.8;}}
+  // rester dans l'arène
   const m0=72;
   if(p.x<m0)dx+=0.7; if(p.x>WORLD_W-m0)dx-=0.7;
   if(p.y<m0)dy+=0.7; if(p.y>WORLD_H-m0)dy-=0.7;
-  // dash offensif opportuniste
-  if(p.dashCd<=0){
-    let prey=null,pmin=175*175;
-    for(const id in G.players){const o=G.players[id];if(o===p||o.shield>0)continue;const d2=dist2(o.x,o.y,p.x,p.y);if(d2<pmin){pmin=d2;prey=o;}}
-    if(prey&&Math.random()<skill*0.06){const ax=prey.x-p.x,ay=prey.y-p.y,d=Math.hypot(ax,ay)||1;dx=ax/d;dy=ay/d;p.input.dashReq=true;}
-  }
-  const mm=Math.hypot(dx,dy)||1, jit=(1-skill)*0.45;
+
+  const mm=Math.hypot(dx,dy)||1, jit=(1-skill)*0.4;
   p.input.ax=clamp(dx/mm+rand(-jit,jit),-1,1);
   p.input.ay=clamp(dy/mm+rand(-jit,jit),-1,1);
 }
@@ -600,13 +728,32 @@ function openLobbyHost(){
   $('#startBtn').style.display='block';
   $('#leaveBtn').style.display='block';
   $('#botControls').style.display='flex';
-  $('#lobbyHint').textContent="Tu es l'hôte. Ajoute des bots 🤖 pour compléter, puis lance (2 à 6 participants).";
+  $('#setupHost').style.display='block';
+  $('#setupClient').style.display='none';
+  $('#lobbyHint').textContent="Tu es l'hôte. Choisis mode + terrain, ajoute des bots 🤖, puis lance (2 à 6 participants).";
+  buildSetup();
   renderLobby();
 }
 function broadcastLobby(){
   const list=lobbyList();
-  for(const id in G.conns) safeSend(G.conns[id],{t:'lobby',players:list,code:G.roomCode});
+  for(const id in G.conns) safeSend(G.conns[id],{t:'lobby',players:list,code:G.roomCode,mode:G.mode,map:G.map});
   if(G.role==='host') renderLobby();
+}
+function buildSetup(){
+  const ms=$('#modeSel');ms.innerHTML='';
+  MODES.forEach(m=>{
+    const el=document.createElement('div');el.className='selchip'+(G.mode===m.id?' on':'');
+    el.innerHTML=`<span class="em">${m.emoji}</span><div class="tx"><div class="tt">${m.name}</div><div class="ds">${m.desc}</div></div>`;
+    el.onclick=()=>{G.mode=m.id;buildSetup();broadcastLobby();};
+    ms.appendChild(el);
+  });
+  const mp=$('#mapSel');mp.innerHTML='';
+  MAPS.forEach(m=>{
+    const el=document.createElement('div');el.className='selchip'+(G.map===m.id?' on':'');
+    el.innerHTML=`<span class="em">${m.emoji}</span><div class="tx"><div class="tt">${m.name}</div></div>`;
+    el.onclick=()=>{G.map=m.id;buildSetup();broadcastLobby();};
+    mp.appendChild(el);
+  });
 }
 function lobbyList(){
   return Object.values(G.players).map(p=>({id:p.id,name:p.name,ci:p.ci,col:p.col,host:p.host,connected:p.connected,bot:!!p.bot,skin:p.skin}));
@@ -617,16 +764,21 @@ let simTimer=null,snapTimer=null,secTimer=null;
 function hostStartGame(){
   if(Object.keys(G.players).length<2){toast('Ajoute au moins un bot ou un joueur');return;}
   G.phase='countdown'; G._xpAwarded=false;
-  G.timeLeft=ROUND_TIME; G.gems=[]; G.powerups=[]; G.results=null;
-  for(const id in G.players){const p=G.players[id];p.score=0;p.r=P_RADIUS;p.tier=0;
-    p.x=rand(150,WORLD_W-150);p.y=rand(150,WORLD_H-150);p.vx=p.vy=0;p.dashCd=0;p.shield=0;p.magnet=0;p.speed=0;
+  G.timeLeft=ROUND_TIME; G.gems=[]; G.powerups=[]; G.results=null; G.zone=null; G.bombs=[]; G.bombT=2.5; G._infEnd=false;
+  const walls=mapDef(G.map).walls;
+  for(const id in G.players){const p=G.players[id];p.score=0;p.acc=0;p.r=P_RADIUS;p.tier=0;
+    p.loup=false;p.stun=0;p.infImmune=0;p.dashCd=0;p.shield=0;p.magnet=0;p.speed=0;p.vx=p.vy=0;
+    do{p.x=rand(150,WORLD_W-150);p.y=rand(150,WORLD_H-150);}while(inWall(p.x,p.y,50,walls));
     if(p.bot){p.tgt=null;p.botT=0;}}
-  for(let i=0;i<26;i++)spawnGem();
+  const gemCount = G.mode==='infect'?0 : (G.mode==='bomb'?18:26);
+  for(let i=0;i<gemCount;i++)spawnGem();
+  if(G.mode==='zone') relocateZone();
+  if(G.mode==='infect'){const ids=Object.keys(G.players);G.players[ids[Math.floor(Math.random()*ids.length)]].loup=true;}
   enterGame();
-  broadcast({t:'phase',phase:'countdown'});
+  broadcast({t:'phase',phase:'countdown',mode:G.mode,map:G.map});
   runCountdown(()=>{
     G.phase='playing';
-    broadcast({t:'phase',phase:'playing'});
+    broadcast({t:'phase',phase:'playing',mode:G.mode,map:G.map});
     let last=performance.now();
     simTimer=setInterval(()=>{const now=performance.now();let dt=(now-last)/1000;last=now;dt=Math.min(dt,0.05);simStep(dt);},1000/TICK_HZ);
     snapTimer=setInterval(sendSnapshot,1000/SNAP_HZ);
@@ -635,17 +787,27 @@ function hostStartGame(){
     },1000);
   });
 }
+function relocateZone(){
+  const walls=mapDef(G.map).walls;let x,y,tr=0;
+  do{x=rand(200,WORLD_W-200);y=rand(200,WORLD_H-200);tr++;}while(inWall(x,y,130,walls)&&tr<30);
+  G.zone={x,y,r:115,t:12};
+}
 function spawnGem(){
-  const g=pickGem();
-  G.gems.push({x:rand(60,WORLD_W-60),y:rand(60,WORLD_H-60),r:g.r,pts:g.pts,col:g.col,ph:rand(0,6.28)});
+  const g=pickGem(),walls=mapDef(G.map).walls;let x,y,tr=0;
+  do{x=rand(60,WORLD_W-60);y=rand(60,WORLD_H-60);tr++;}while(inWall(x,y,22,walls)&&tr<25);
+  G.gems.push({x,y,r:g.r,pts:g.pts,col:g.col,ph:rand(0,6.28)});
 }
 function spawnPower(){
   if(G.powerups.length>=3)return;
-  const k=POWER_TYPES[Math.floor(Math.random()*POWER_TYPES.length)];
-  G.powerups.push({x:rand(80,WORLD_W-80),y:rand(80,WORLD_H-80),k,ph:rand(0,6.28)});
+  const pool = G.mode==='infect' ? ['speed','shield'] : POWER_TYPES;
+  const k=pool[Math.floor(Math.random()*pool.length)];
+  const walls=mapDef(G.map).walls;let x,y,tr=0;
+  do{x=rand(80,WORLD_W-80);y=rand(80,WORLD_H-80);tr++;}while(inWall(x,y,26,walls)&&tr<25);
+  G.powerups.push({x,y,k,ph:rand(0,6.28)});
 }
 function simStep(dt){
   const now=performance.now();
+  const walls=mapDef(G.map).walls;
   // timeout d'inactivité -> déconnecté (les bots ne se déconnectent jamais)
   for(const id in G.players){
     const p=G.players[id];
@@ -664,7 +826,10 @@ function simStep(dt){
     p.magnet=Math.max(0,p.magnet-dt);
     p.speed=Math.max(0,p.speed-dt);
     p.hitFx=Math.max(0,p.hitFx-dt);
+    p.stun=Math.max(0,p.stun-dt);
+    p.infImmune=Math.max(0,p.infImmune-dt);
     let ax=p.input.ax,ay=p.input.ay;
+    if(p.stun>0){ax=0;ay=0;p.input.dashReq=false;}
     const mag=Math.hypot(ax,ay); if(mag>1){ax/=mag;ay/=mag;}
     // dash
     if(p.input.dashReq && p.dashCd<=0 && p.dashT<=0 && (mag>0.1||true)){
@@ -679,9 +844,11 @@ function simStep(dt){
     else { p.vx=ax*spd; p.vy=ay*spd; }
     p.x=clamp(p.x+p.vx*dt,p.r,WORLD_W-p.r);
     p.y=clamp(p.y+p.vy*dt,p.r,WORLD_H-p.r);
+    for(const w of walls) collideWall(p,w);
+    p.x=clamp(p.x,p.r,WORLD_W-p.r); p.y=clamp(p.y,p.r,WORLD_H-p.r);
   }
-  // collecte gems (magnet + pickup)
-  for(const id in G.players){
+  // collecte gems (magnet + pickup) — pas de gemmes en Infection
+  if(G.mode!=='infect') for(const id in G.players){
     const p=G.players[id];
     const magR = p.magnet>0 ? 210 : tierPassiveMagnet(p.tier||0);
     for(let i=G.gems.length-1;i>=0;i--){
@@ -696,6 +863,10 @@ function simStep(dt){
         broadcast({t:'fx',k:'pick',x:g.x,y:g.y,col:g.col,pid:id,pts:g.pts});
       }
     }
+  }
+  // ramassage des bonus (tous les modes)
+  for(const id in G.players){
+    const p=G.players[id];
     for(let i=G.powerups.length-1;i>=0;i--){
       const pw=G.powerups[i];
       if(dist2(p.x,p.y,pw.x,pw.y)<(p.r+18)*(p.r+18)){
@@ -706,7 +877,7 @@ function simStep(dt){
       }
     }
   }
-  // collisions joueurs : un dasher bouscule et vole des gems
+  // collisions entre joueurs (séparation + effet selon le mode)
   const ids=Object.keys(G.players);
   for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++){
     const a=G.players[ids[i]],b=G.players[ids[j]];
@@ -714,10 +885,30 @@ function simStep(dt){
       const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1,nx=dx/d,ny=dy/d;
       const over=rr-d;
       a.x-=nx*over/2;a.y-=ny*over/2;b.x+=nx*over/2;b.y+=ny*over/2;
-      const aDash=a.dashT>0,bDash=b.dashT>0;
-      if(aDash&&!bDash&&b.shield<=0){knock(a,b,nx,ny);}
-      else if(bDash&&!aDash&&a.shield<=0){knock(b,a,-nx,-ny);}
+      if(G.mode==='infect'){
+        if(a.loup&&!b.loup&&b.infImmune<=0) infect(a,b);
+        else if(b.loup&&!a.loup&&a.infImmune<=0) infect(b,a);
+      } else {
+        const aDash=a.dashT>0,bDash=b.dashT>0;
+        if(aDash&&!bDash&&b.shield<=0){knock(a,b,nx,ny);}
+        else if(bDash&&!aDash&&a.shield<=0){knock(b,a,-nx,-ny);}
+      }
     }
+  }
+  // logique spécifique au mode
+  if(G.mode==='zone' && G.zone){
+    G.zone.t-=dt;
+    if(G.zone.t<=0){relocateZone();broadcast({t:'fx',k:'zonemove',x:G.zone.x,y:G.zone.y});}
+    for(const id in G.players){const p=G.players[id];
+      if(dist2(p.x,p.y,G.zone.x,G.zone.y)<G.zone.r*G.zone.r){p.acc+=3*dt;while(p.acc>=1){p.acc-=1;p.score++;}}}
+  } else if(G.mode==='infect'){
+    let survivors=0;
+    for(const id in G.players){const p=G.players[id];if(!p.loup){survivors++;p.acc+=1*dt;while(p.acc>=1){p.acc-=1;p.score++;}}}
+    if(survivors===0 && !G._infEnd){G._infEnd=true;setTimeout(()=>{if(G.phase==='playing')hostEndGame();},500);}
+  } else if(G.mode==='bomb'){
+    G.bombT-=dt;
+    if(G.bombT<=0){G.bombT=rand(1.8,3.2);spawnBomb();}
+    for(let i=G.bombs.length-1;i>=0;i--){const bm=G.bombs[i];bm.fuse-=dt;if(bm.fuse<=0){explodeBomb(bm);G.bombs.splice(i,1);}}
   }
   // évolution de palier (tier) selon le score
   for(const id in G.players){
@@ -727,6 +918,25 @@ function simStep(dt){
   }
   // spawn powerups périodiques
   if(Math.random()<dt*0.25) spawnPower();
+}
+function infect(loup,victim){
+  victim.loup=true; victim.infImmune=1.2; loup.score+=8; victim.hitFx=0.5;
+  broadcast({t:'fx',k:'infect',x:victim.x,y:victim.y,col:victim.col});
+}
+function spawnBomb(){
+  const walls=mapDef(G.map).walls;let x,y,tr=0;
+  do{x=rand(100,WORLD_W-100);y=rand(100,WORLD_H-100);tr++;}while(inWall(x,y,30,walls)&&tr<25);
+  G.bombs.push({x,y,fuse:2.2});broadcast({t:'fx',k:'bombset',x,y});
+}
+function explodeBomb(bm){
+  const R=125;
+  for(const id in G.players){const p=G.players[id];const d2=dist2(p.x,p.y,bm.x,bm.y);
+    if(d2<R*R && p.shield<=0){const d=Math.sqrt(d2)||1,nx=(p.x-bm.x)/d,ny=(p.y-bm.y)/d;
+      p.stun=0.6;p.hitFx=0.5;p.x=clamp(p.x+nx*95,p.r,WORLD_W-p.r);p.y=clamp(p.y+ny*95,p.r,WORLD_H-p.r);
+      const loss=Math.min(p.score,5);
+      if(loss>0){p.score-=loss;p.r=Math.min(MAX_R,P_RADIUS+p.score*0.12);
+        for(let k=0;k<loss;k++){const a=rand(0,6.28);G.gems.push({x:p.x+Math.cos(a)*40,y:p.y+Math.sin(a)*40,r:9,pts:1,col:'#08d9d6',ph:rand(0,6)});}}}}
+  broadcast({t:'fx',k:'boom',x:bm.x,y:bm.y,r:R});
 }
 function knock(att,vic,nx,ny){
   vic.x=clamp(vic.x+nx*70,vic.r,WORLD_W-vic.r);
@@ -743,10 +953,12 @@ function knock(att,vic,nx,ny){
   broadcast({t:'fx',k:'hit',x:vic.x,y:vic.y,col:att.col});
 }
 function sendSnapshot(){
-  const snap={t:'snap',tk:performance.now(),tl:G.timeLeft,
-    pl:Object.values(G.players).map(p=>({i:p.id,n:p.name,c:p.col,ci:p.ci,sk:p.skin,tr:p.tier||0,bt:p.bot?1:0,x:Math.round(p.x),y:Math.round(p.y),r:Math.round(p.r),s:p.score,d:p.dashT>0?1:0,sh:p.shield>0?1:0,cd:+(p.dashCd.toFixed(2)),co:p.connected?1:0,hf:p.hitFx>0?1:0})),
+  const snap={t:'snap',tk:performance.now(),tl:G.timeLeft,md:G.mode,mp:G.map,
+    pl:Object.values(G.players).map(p=>({i:p.id,n:p.name,c:p.col,ci:p.ci,sk:p.skin,tr:p.tier||0,bt:p.bot?1:0,lp:p.loup?1:0,st:p.stun>0?1:0,x:Math.round(p.x),y:Math.round(p.y),r:Math.round(p.r),s:p.score,d:p.dashT>0?1:0,sh:p.shield>0?1:0,cd:+(p.dashCd.toFixed(2)),co:p.connected?1:0,hf:p.hitFx>0?1:0})),
     g:G.gems.map(g=>[Math.round(g.x),Math.round(g.y),g.r,g.col]),
     pw:G.powerups.map(p=>[Math.round(p.x),Math.round(p.y),p.k]),
+    z:G.zone?[Math.round(G.zone.x),Math.round(G.zone.y),G.zone.r]:null,
+    bo:G.bombs.map(b=>[Math.round(b.x),Math.round(b.y),+(b.fuse.toFixed(2))]),
   };
   broadcast(snap);
   // host s'affiche via la boucle de rendu à partir de son état direct
@@ -828,10 +1040,15 @@ function clientOnData(d){
       break;
     case 'lobby':
       G.lobbyPlayers=d.players; G.roomCode=d.code||G.roomCode;
+      if(d.mode)G.mode=d.mode; if(d.map)G.map=d.map;
       $('#lobbyCode').textContent=G.roomCode;
-      if(G.phase==='lobby'){show('lobbyScreen');renderLobby();}
+      if(G.phase==='lobby'){show('lobbyScreen');$('#setupHost').style.display='none';
+        $('#setupClient').style.display='block';
+        $('#setupClient').innerHTML=`Mode : <b>${modeDef(G.mode).emoji} ${modeDef(G.mode).name}</b><br>Terrain : <b>${mapDef(G.map).emoji} ${mapDef(G.map).name}</b>`;
+        renderLobby();}
       break;
     case 'phase':
+      if(d.mode)G.mode=d.mode; if(d.map)G.map=d.map;
       if(d.phase==='countdown'){G.everStarted=true;G._xpAwarded=false;$('#resultsOverlay').classList.remove('on');enterGame();}
       else if(d.phase==='playing'){G.phase='playing';G.everStarted=true;$('#countdown').style.display='none';enterGame();}
       break;
@@ -842,6 +1059,7 @@ function clientOnData(d){
       break;}
     case 'snap':
       G.phase='playing';
+      if(d.md)G.mode=d.md; if(d.mp)G.map=d.mp;
       G.snapPrev=G.snapCur; G.snapCur=d; G.snapTime=performance.now();
       G.timeLeft=d.tl;
       break;
@@ -852,7 +1070,7 @@ function clientOnData(d){
   }
 }
 function enterGame(){
-  if(!$('#gameScreen').classList.contains('on')){show('gameScreen');fitCanvas();ensureLoop();}
+  if(!$('#gameScreen').classList.contains('on')){show('gameScreen');fitCanvas();ensureLoop();updateOrientation();}
 }
 //////////////////// Heartbeat + surveillance réseau ////////////////////
 let hbTimer=null;
@@ -978,9 +1196,15 @@ function fitCanvas(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
   VIEW.dpr=dpr;
 }
-window.addEventListener('resize',()=>{if($('#gameScreen').classList.contains('on'))fitCanvas();});
+function updateOrientation(){
+  const portrait = window.matchMedia('(orientation: portrait)').matches;
+  const inGame = $('#gameScreen').classList.contains('on');
+  $('#rotateOverlay').classList.toggle('on', isTouch() && portrait && inGame);
+}
+window.addEventListener('resize',()=>{if($('#gameScreen').classList.contains('on'))fitCanvas();updateOrientation();});
+window.addEventListener('orientationchange',()=>{setTimeout(()=>{if($('#gameScreen').classList.contains('on'))fitCanvas();updateOrientation();},250);});
 
-const particles=[]; const floaters=[];
+const particles=[]; const floaters=[]; const rings=[];
 function spawnFx(d){
   if(d.k==='pick'){for(let i=0;i<10;i++){const a=rand(0,6.28),sp=rand(40,180);particles.push({x:d.x,y:d.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:.5,max:.5,col:d.col,r:rand(2,4)});}
     floaters.push({x:d.x,y:d.y,txt:'+'+d.pts,life:.8,col:d.col});shakeAdd(1.5);}
@@ -989,6 +1213,13 @@ function spawnFx(d){
     floaters.push({x:d.x,y:d.y-6,txt:d.pk.toUpperCase(),life:1,col:'#ffd93d'});shakeAdd(3);}
   else if(d.k==='tierup'){for(let i=0;i<22;i++){const a=rand(0,6.28),sp=rand(90,280);particles.push({x:d.x,y:d.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:.8,max:.8,col:d.col,r:rand(2,5)});}
     floaters.push({x:d.x,y:d.y-10,txt:'PALIER '+(d.tier+1)+' !',life:1.3,col:d.col});shakeAdd(4);}
+  else if(d.k==='boom'){rings.push({x:d.x,y:d.y,r:12,max:(d.r||120),life:.55,max2:.55,col:'#ff6b3d'});
+    for(let i=0;i<26;i++){const a=rand(0,6.28),sp=rand(120,420);particles.push({x:d.x,y:d.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:.6,max:.6,col:i%2?'#ffd93d':'#ff2e63',r:rand(2,6)});}
+    floaters.push({x:d.x,y:d.y-10,txt:'BOOM !',life:1,col:'#ff6b3d'});shakeAdd(12);}
+  else if(d.k==='infect'){for(let i=0;i<20;i++){const a=rand(0,6.28),sp=rand(80,300);particles.push({x:d.x,y:d.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:.7,max:.7,col:'#ff2e63',r:rand(2,5)});}
+    floaters.push({x:d.x,y:d.y-10,txt:'INFECTÉ ! 🧟',life:1.2,col:'#ff2e63'});shakeAdd(6);}
+  else if(d.k==='zonemove'){rings.push({x:d.x,y:d.y,r:20,max:130,life:.6,max2:.6,col:'#ffd93d'});}
+  else if(d.k==='bombset'){for(let i=0;i<8;i++){const a=rand(0,6.28),sp=rand(40,120);particles.push({x:d.x,y:d.y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:.4,max:.4,col:'#ff2e63',r:rand(2,3)});}}
 }
 let shake=0;function shakeAdd(v){shake=Math.min(14,shake+v);}
 
@@ -1005,20 +1236,23 @@ function loop(t){
 function updateParticles(dt){
   for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.life-=dt;if(p.life<=0){particles.splice(i,1);continue;}p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=0.92;p.vy*=0.92;}
   for(let i=floaters.length-1;i>=0;i--){const f=floaters[i];f.life-=dt;f.y-=30*dt;if(f.life<=0)floaters.splice(i,1);}
+  for(let i=rings.length-1;i>=0;i--){const rg=rings[i];rg.life-=dt;rg.r+=(rg.max-rg.r)*Math.min(1,dt*10);if(rg.life<=0)rings.splice(i,1);}
   if(shake>0)shake=Math.max(0,shake-dt*28);
 }
 
 function getRenderState(){
-  // renvoie {players:[], gems:[], powerups:[]} en coords monde
+  // renvoie {players:[], gems:[], powerups:[], zone, bombs} en coords monde
   if(G.role==='host'){
     return {
-      players:Object.values(G.players).map(p=>({x:p.x,y:p.y,r:p.r,col:p.col,skin:p.skin,tier:p.tier||0,bot:!!p.bot,name:p.name,score:p.score,dash:p.dashT>0,shield:p.shield>0,connected:p.connected,hit:p.hitFx>0,me:p.id===G.myId})),
+      players:Object.values(G.players).map(p=>({x:p.x,y:p.y,r:p.r,col:p.col,skin:p.skin,tier:p.tier||0,bot:!!p.bot,loup:!!p.loup,stun:p.stun>0,name:p.name,score:p.score,dash:p.dashT>0,shield:p.shield>0,connected:p.connected,hit:p.hitFx>0,me:p.id===G.myId})),
       gems:G.gems.map(g=>({x:g.x,y:g.y,r:g.r,col:g.col})),
       powerups:G.powerups.map(p=>({x:p.x,y:p.y,k:p.k})),
+      zone:G.zone?{x:G.zone.x,y:G.zone.y,r:G.zone.r}:null,
+      bombs:G.bombs.map(b=>({x:b.x,y:b.y,fuse:b.fuse})),
     };
   }
   // client : interpolation entre snapPrev et snapCur
-  const cur=G.snapCur;if(!cur)return {players:[],gems:[],powerups:[]};
+  const cur=G.snapCur;if(!cur)return {players:[],gems:[],powerups:[],zone:null,bombs:[]};
   const prev=G.snapPrev||cur;
   const span=1000/SNAP_HZ;
   let a=clamp((performance.now()-G.snapTime)/span,0,1.3);
@@ -1031,12 +1265,14 @@ function getRenderState(){
       G.localSelf.x=lerp(G.localSelf.x,p.x,0.25);G.localSelf.y=lerp(G.localSelf.y,p.y,0.25);
       x=G.localSelf.x;y=G.localSelf.y;
     }
-    return {x,y,r:p.r,col:p.c,skin:p.sk,tier:p.tr||0,bot:!!p.bt,name:p.n,score:p.s,dash:!!p.d,shield:!!p.sh,connected:!!p.co,hit:!!p.hf,me};
+    return {x,y,r:p.r,col:p.c,skin:p.sk,tier:p.tr||0,bot:!!p.bt,loup:!!p.lp,stun:!!p.st,name:p.n,score:p.s,dash:!!p.d,shield:!!p.sh,connected:!!p.co,hit:!!p.hf,me};
   });
   return {
     players,
     gems:cur.g.map(g=>({x:g[0],y:g[1],r:g[2],col:g[3]})),
     powerups:cur.pw.map(p=>({x:p[0],y:p[1],k:p[2]})),
+    zone:cur.z?{x:cur.z[0],y:cur.z[1],r:cur.z[2]}:null,
+    bombs:(cur.bo||[]).map(b=>({x:b[0],y:b[1],fuse:b[2]})),
   };
 }
 // prédiction locale pour le client (déplacement immédiat entre snapshots)
@@ -1059,6 +1295,16 @@ function draw(t){
   ctx.translate(sx,sy);
   drawBackground(t);
   const st=getRenderState();
+  // zone (mode Roi de la Zone)
+  if(st.zone){const z=st.zone,pulse=1+Math.sin(t*0.005)*0.05;
+    ctx.save();const g=ctx.createRadialGradient(z.x,z.y,z.r*0.2,z.x,z.y,z.r*pulse);
+    g.addColorStop(0,'rgba(255,217,61,0.20)');g.addColorStop(1,'rgba(255,217,61,0)');
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(z.x,z.y,z.r*pulse,0,6.28);ctx.fill();
+    ctx.strokeStyle='rgba(255,217,61,0.9)';ctx.lineWidth=3;ctx.shadowColor='#ffd93d';ctx.shadowBlur=16;
+    ctx.setLineDash([12,9]);ctx.lineDashOffset=-t*0.04;ctx.beginPath();ctx.arc(z.x,z.y,z.r,0,6.28);ctx.stroke();ctx.restore();
+    ctx.save();ctx.fillStyle='#ffd93d';ctx.font='700 16px Fredoka, sans-serif';ctx.textAlign='center';ctx.fillText('👑 ZONE',z.x,z.y-z.r-10);ctx.restore();}
+  // ondes de choc (explosions)
+  for(const rg of rings){ctx.save();ctx.globalAlpha=clamp(rg.life/rg.max2,0,1);ctx.strokeStyle=rg.col;ctx.lineWidth=5;ctx.shadowColor=rg.col;ctx.shadowBlur=18;ctx.beginPath();ctx.arc(rg.x,rg.y,rg.r,0,6.28);ctx.stroke();ctx.restore();}
   // gems
   for(const g of st.gems){
     ctx.save();ctx.shadowColor=g.col;ctx.shadowBlur=14;
@@ -1080,6 +1326,14 @@ function draw(t){
     ctx.fillText(pw.k==='magnet'?'🧲':pw.k==='shield'?'🛡':'⚡',pw.x,pw.y+1);
     ctx.restore();
   }
+  // bombes (mode Bombes)
+  for(const bm of st.bombs){
+    ctx.save();const near=bm.fuse<0.8;const blink=Math.sin(t*(near?0.03:0.013))>0;
+    ctx.shadowColor='#ff2e63';ctx.shadowBlur=blink?26:10;
+    ctx.fillStyle=blink?'#ff5b7a':'#2a0a12';ctx.beginPath();ctx.arc(bm.x,bm.y,20,0,6.28);ctx.fill();
+    ctx.shadowBlur=0;ctx.font='20px Fredoka, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('💣',bm.x,bm.y+1);
+    ctx.restore();
+  }
   // particles (sous les joueurs)
   for(const p of particles){ctx.globalAlpha=clamp(p.life/p.max,0,1);ctx.fillStyle=p.col;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,6.28);ctx.fill();}
   ctx.globalAlpha=1;
@@ -1091,7 +1345,7 @@ function draw(t){
     drawOrb(ctx,p,t);
     ctx.restore();
     // nom
-    const label=(p.bot?'🤖 ':'')+p.name;
+    const label=(p.loup?'🧟 ':'')+(p.bot?'🤖 ':'')+p.name;
     ctx.save();ctx.globalAlpha=p.connected?1:0.4;ctx.font='600 14px Space Grotesk, sans-serif';ctx.textAlign='center';
     ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillText(label,p.x,p.y-p.r-10+1);
     ctx.fillStyle='#fff';ctx.fillText(label,p.x,p.y-p.r-10);
@@ -1101,17 +1355,29 @@ function draw(t){
   for(const f of floaters){ctx.save();ctx.globalAlpha=clamp(f.life,0,1);ctx.font='bold 20px Fredoka, sans-serif';ctx.textAlign='center';ctx.fillStyle=f.col;ctx.shadowColor=f.col;ctx.shadowBlur=8;ctx.fillText(f.txt,f.x,f.y);ctx.restore();}
   ctx.restore();
 }
+function hexA(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`;}
+function roundRect(c,x,y,w,h,r){r=Math.min(r,w/2,h/2);c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+function drawWall(w,accent){
+  ctx.save();ctx.shadowColor=accent;ctx.shadowBlur=16;
+  const g=ctx.createLinearGradient(w.x,w.y,w.x,w.y+w.h);
+  g.addColorStop(0,hexA(accent,0.55));g.addColorStop(1,hexA(accent,0.28));
+  ctx.fillStyle=g;roundRect(ctx,w.x,w.y,w.w,w.h,10);ctx.fill();
+  ctx.shadowBlur=0;ctx.strokeStyle=hexA(accent,0.9);ctx.lineWidth=2;roundRect(ctx,w.x,w.y,w.w,w.h,10);ctx.stroke();
+  ctx.restore();
+}
 function drawBackground(t){
-  ctx.fillStyle='#0d0d24';ctx.fillRect(0,0,WORLD_W,WORLD_H);
-  // grille néon animée
-  const hue=(t*0.02)%360;
-  ctx.strokeStyle=`hsla(${hue},70%,60%,0.10)`;ctx.lineWidth=1;
+  const M=mapDef(G.map);
+  ctx.fillStyle=M.bg;ctx.fillRect(0,0,WORLD_W,WORLD_H);
+  // grille néon
+  ctx.strokeStyle=hexA(M.grid,0.10);ctx.lineWidth=1;
   const gs=64;ctx.beginPath();
   for(let x=0;x<=WORLD_W;x+=gs){ctx.moveTo(x,0);ctx.lineTo(x,WORLD_H);}
   for(let y=0;y<=WORLD_H;y+=gs){ctx.moveTo(0,y);ctx.lineTo(WORLD_W,y);}
   ctx.stroke();
+  // obstacles
+  for(const w of M.walls) drawWall(w,M.accent);
   // bordure glow
-  ctx.strokeStyle=`hsla(${hue},80%,65%,0.5)`;ctx.lineWidth=4;ctx.shadowColor=`hsla(${hue},80%,65%,0.8)`;ctx.shadowBlur=18;
+  ctx.strokeStyle=hexA(M.accent,0.55);ctx.lineWidth=4;ctx.shadowColor=hexA(M.accent,0.8);ctx.shadowBlur=18;
   ctx.strokeRect(2,2,WORLD_W-4,WORLD_H-4);ctx.shadowBlur=0;
 }
 function shade(hex,amt){
@@ -1138,7 +1404,12 @@ function drawStar(ctx,cx,cy,rr,rot,spikes,col){
 // dessine un orb complet (corps + skin + accessoires + yeux)
 function drawOrb(ctx,p,t){
   const x=p.x,y=p.y,r=p.r,skin=p.skin||'neon',tier=p.tier||0;
+  if(!isFinite(x)||!isFinite(y)||!isFinite(r)||r<=0)return;
   const body=effectiveColor(p,t), dark=darkColor(body);
+  // aura de loup (mode Infection)
+  if(p.loup){ctx.save();ctx.globalAlpha=0.55+0.25*Math.sin(t*0.01);ctx.strokeStyle='#ff2e63';ctx.lineWidth=4;ctx.shadowColor='#ff2e63';ctx.shadowBlur=22;ctx.beginPath();ctx.arc(x,y,r+7,0,6.28);ctx.stroke();ctx.restore();}
+  // étourdi (stun)
+  if(p.stun){ctx.save();ctx.fillStyle='#ffd93d';for(let i=0;i<3;i++){const a=t*0.012+i*2.094;ctx.beginPath();ctx.arc(x+Math.cos(a)*(r*0.5),y-r-6+Math.sin(a)*3,2.2,0,6.28);ctx.fill();}ctx.restore();}
   // aura de palier (tier)
   if(tier>0){ctx.save();ctx.globalAlpha=0.55;ctx.shadowColor=body;ctx.shadowBlur=12;ctx.lineWidth=2;ctx.strokeStyle=body;
     for(let k=0;k<tier;k++){ctx.beginPath();ctx.arc(x,y,r+6+k*4+Math.sin(t*0.006+k)*1.5,0,6.28);ctx.stroke();}ctx.restore();}
@@ -1202,6 +1473,11 @@ function updateHUD(){
   const tl=G.timeLeft;const m=Math.floor(tl/60),s=tl%60;
   const timer=$('#timer');timer.textContent=`${m}:${s<10?'0':''}${s}`;
   timer.classList.toggle('urgent',tl<=10&&tl>0);
+  // bannière mode + terrain
+  const md=modeDef(G.mode),mp=mapDef(G.map);
+  let bn=`${md.emoji} ${md.name} · ${mp.emoji} ${mp.name}`;
+  if(G.mode==='infect'){const loups=players.filter(p=>p.loup).length;bn+=` · 🧟 ${loups}/${players.length}`;}
+  $('#modeBanner').textContent=bn;
   // dash cooldown visuel (mobile)
   if(G.role==='host'){const me=G.players[G.myId];if(me)$('#dashBtn').classList.toggle('cool',me.dashCd>0);}
   else if(G.snapCur){const me=G.snapCur.pl.find(p=>p.i===G.myId);if(me)$('#dashBtn').classList.toggle('cool',me.cd>0);}
@@ -1211,6 +1487,7 @@ function updateHUD(){
 function showResults(res,isHost){
   clearInterval(hbTimer);
   $('#gameScreen').classList.remove('on');
+  $('#rotateOverlay').classList.remove('on');
   const pod=$('#podium');pod.innerHTML='';
   const medals=['🥇','🥈','🥉','4️⃣'];
   res.forEach((r,i)=>{
