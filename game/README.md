@@ -22,12 +22,34 @@ fin du chrono !
 - **Dash** dans un adversaire pour lui **voler des gemmes** (sauf s'il a un bouclier).
 - **Bonus** : 🧲 aimant (attire les gemmes), 🛡 bouclier (protège du dash), ⚡ vitesse.
 - Manche de **90 secondes** — le meilleur score gagne. 🏆
+- Jusqu'à **6 participants** (humains + bots).
 
 ### Lancer une partie
 1. Un joueur clique **« Créer une partie »** → il obtient un **code à 4 lettres**.
 2. Il partage le code (ou le lien d'invitation « Copier »).
 3. Les autres ouvrent la **même page**, entrent le code, cliquent **« Rejoindre »**.
-4. L'hôte clique **« Lancer la partie »** (2 à 4 joueurs).
+4. L'hôte peut **ajouter des bots 🤖** pour compléter l'arène, puis clique **« Lancer la partie »**.
+
+## 🤖 Bots (IA)
+Dans le salon, l'hôte ajoute/retire des **adversaires contrôlés par l'IA** (＋/－ Bot).
+Ils cherchent les gemmes de plus grande valeur, ramassent les bonus, **esquivent les
+dashs** adverses et **foncent** parfois sur les joueurs proches. Idéal pour jouer en solo
+ou compléter une petite partie. Leur niveau de skill varie légèrement d'un bot à l'autre.
+
+## 📈 Progression, évolutions & skins
+
+**Paliers en cours de partie (évolutions de bonus).** Ton orb évolue selon ton score :
+`Novice → Rapide → Aimanté → Colosse`. À chaque palier tu gagnes de la vitesse, un
+**dash qui recharge plus vite**, un **aimant passif**, des **bonus qui durent plus
+longtemps**, et au dernier palier un **vol de gemmes renforcé**. Une aura entoure ton orb
+et un « PALIER X ! » apparaît.
+
+**Niveaux de compte (persistants).** Chaque partie rapporte de l'**XP** (score + bonus de
+classement). Ta progression est sauvegardée dans le navigateur (localStorage).
+
+**Skins débloquables (Vestiaire 🎽).** 10 apparences se débloquent en montant de niveau :
+Néon, Rayures, Halo, Robot, Étoile, Roi 👑, Galaxie, Flamme 🔥, Arc-en-ciel 🌈, Or massif.
+Le skin choisi est visible par **tous les joueurs** de la partie.
 
 ---
 
