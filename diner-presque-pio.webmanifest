@@ -1,0 +1,30 @@
+{
+  "name": "Dîner Presque Pio",
+  "short_name": "Dîner Pio",
+  "description": "Concours de cuisine du camp : votes en direct et classement sous cloche.",
+  "start_url": "./diner-presque-pio.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FBF6EC",
+  "theme_color": "#FBF6EC",
+  "icons": [
+    {
+      "src": "diner-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "diner-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "diner-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
