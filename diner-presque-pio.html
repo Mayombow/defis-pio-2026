@@ -1147,6 +1147,10 @@ function showApp(){
   setTimeout(()=>{ const l=$('#loading'); if(l) l.remove(); },450);
   if(!me) openWhois();
 }
+function isTypingUnsent(){
+  const a=document.activeElement;
+  return !!(a && (a.tagName==='INPUT'||a.tagName==='TEXTAREA') && a.value && a.value.trim()!=='');
+}
 function startPolling(){
   if(pollTimer || OFFLINE) return;
   let lastSig=sig();
@@ -1154,7 +1158,13 @@ function startPolling(){
     try{
       await fetchState();
       const s=sig();
-      if(s!==lastSig){ lastSig=s; rebuild(); }
+      if(s!==lastSig){
+        // ne pas réafficher pendant que quelqu'un tape (sinon on efface son texte
+        // non envoyé) : on garde lastSig inchangé pour réessayer au prochain tick,
+        // une fois le champ quitté ou envoyé.
+        if(isTypingUnsent()) return;
+        lastSig=s; rebuild();
+      }
     }catch(e){}
   },8000);
 }
